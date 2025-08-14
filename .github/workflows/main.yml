@@ -1,66 +1,68 @@
-name: Windows · build (MSYS2 / MinGW-w64 + Qt6 + auto-deploy)
+name: Build Windows (MinGW + Qt)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 (toolchain + Qt6)
+      - name: Install MSYS2
         uses: msys2/setup-msys2@v2
         with:
           update: true
           install: >
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-qt6
+            mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
-            mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-ntldd
+            make
 
-      - name: Debug info
-        shell: msys2 {0}
-        run: |
-          echo "MSYSTEM=$MSYSTEM"
-          which c++
-          c++ --version
-          which cmake
-          cmake --version
-          qmake --version || true
-          which ntldd
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.7.2
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          cache: true
+          modules: qttools
+          set-env: true
+          add-tools-to-path: true
 
-      - name: Configure & build
+      - name: Configure & Build
         shell: msys2 {0}
         run: |
           set -e
-          CMAKE_PREFIX_PATH="/mingw64/lib/cmake"
+          QT_UNIX="$(cygpath -u "$QT_ROOT_DIR")"
+          echo "Using QT (unix path): $QT_UNIX"
+
           mkdir -p build
           cd build
           cmake -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}" \
+            -DCMAKE_PREFIX_PATH="$QT_UNIX/lib/cmake" \
             -S .. -B .
           JOBS=$(nproc || echo 2)
-          cmake --build . --config Release --parallel ${JOBS}
+          cmake --build . --config Release -- -j${JOBS}
 
-      - name: Deploy Qt dependencies
+      - name: Deploy dependencies
         shell: msys2 {0}
         run: |
           set -e
           mkdir deploy
           cp build/FileXorProcessor.exe deploy/
-      
+
           echo "=== Поиск зависимостей ==="
           ntldd -R deploy/FileXorProcessor.exe 2>/dev/null || true | grep "=> /mingw64" || true | awk '{print $3}' | sort -u > dll_list.txt
-      
+
           echo "=== Копируем DLL ==="
           while IFS= read -r dll; do
             if [ -f "$dll" ]; then
@@ -68,20 +70,12 @@ jobs:
               cp "$dll" deploy/
             fi
           done < dll_list.txt
-      
+
           echo "=== Содержимое deploy/ ==="
           ls -l deploy
-
-
-      - name: Create ZIP package
-        shell: pwsh
-        run: |
-          Compress-Archive -Path deploy\* -DestinationPath FileXorProcessor-Windows-x64.zip
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: FileXorProcessor-Windows-x64
-          path: |
-            deploy
-            FileXorProcessor-Windows-x64.zip
+          path: deploy
