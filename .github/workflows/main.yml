@@ -1,4 +1,4 @@
-name: Windows · build (MSYS2 / MinGW-w64 + Qt6 + windeployqt)
+name: Windows · build (MSYS2 / MinGW-w64 + Qt6 + auto-deploy)
 
 on:
   push:
@@ -24,8 +24,9 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-ntldd
 
-      - name: Debug info (MSYS2 environment)
+      - name: Debug info
         shell: msys2 {0}
         run: |
           echo "MSYSTEM=$MSYSTEM"
@@ -34,6 +35,7 @@ jobs:
           which cmake
           cmake --version
           qmake --version || true
+          which ntldd
 
       - name: Configure & build
         shell: msys2 {0}
@@ -49,24 +51,24 @@ jobs:
           JOBS=$(nproc || echo 2)
           cmake --build . --config Release --parallel ${JOBS}
 
-      - name: Install official Qt tools (windeployqt)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: 6.7.2
-          host: windows
-          target: desktop
-          arch: win64_mingw
-          modules: qttools
-          cache: true
-
       - name: Deploy Qt dependencies
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          $qtTools = "${env:QT_ROOT_DIR}\bin\windeployqt.exe"
-          Write-Host "Using windeployqt from: $qtTools"
+          set -e
           mkdir deploy
-          Copy-Item build\FileXorProcessor.exe deploy\
-          & "$qtTools" deploy\FileXorProcessor.exe
+          cp build/FileXorProcessor.exe deploy/
+
+          echo "=== Поиск зависимостей ==="
+          ntldd -R deploy/FileXorProcessor.exe | grep "=> /mingw64" | awk '{print $3}' | sort -u > dll_list.txt
+          
+          echo "=== Копируем DLL ==="
+          while IFS= read -r dll; do
+            echo "Копируем: $dll"
+            cp "$dll" deploy/
+          done < dll_list.txt
+
+          echo "=== Содержимое deploy/ ==="
+          ls -l deploy
 
       - name: Create ZIP package
         shell: pwsh
