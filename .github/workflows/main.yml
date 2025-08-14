@@ -9,11 +9,12 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 (install mingw toolchain, Qt6, cmake, ninja)
+      - name: Setup MSYS2 (toolchain + Qt6 + tools)
         uses: msys2/setup-msys2@v2
         with:
           update: true
@@ -25,7 +26,7 @@ jobs:
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
 
-      - name: Debug info (show compilers / Qt)
+      - name: Debug info
         shell: msys2 {0}
         run: |
           echo "MSYSTEM=$MSYSTEM"
@@ -33,18 +34,13 @@ jobs:
           c++ --version
           which cmake
           cmake --version
-          which qmake || true
-          qmake --version || true
-          echo "Qt pkgcmake dir: /mingw64/lib/cmake"
-      
-      - name: Configure & build (MSYS2 / MinGW shell)
+          which windeployqt
+          windeployqt --version
+
+      - name: Configure & build
         shell: msys2 {0}
         run: |
           set -e
-          unset QT_ROOT_DIR || true
-          unset QT_PLUGIN_PATH || true
-          unset QML2_IMPORT_PATH || true
-
           CMAKE_PREFIX_PATH="/mingw64/lib/cmake"
 
           mkdir -p build
@@ -59,15 +55,14 @@ jobs:
           cmake --build . --config Release --parallel ${JOBS}
 
       - name: Deploy Qt dependencies
-      shell: pwsh
-      run: |
-        mkdir deploy
-        cp build/FileXorProcessor.exe deploy/
-        & "D:/a/_temp/msys64/mingw64/bin/windeployqt.exe" deploy/FileXorProcessor.exe
-        
-      - name: Collect artifacts
-        if: always()
+        shell: msys2 {0}
+        run: |
+          mkdir deploy
+          cp build/FileXorProcessor.exe deploy/
+          windeployqt deploy/FileXorProcessor.exe
+
+      - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
+          name: FileXorProcessor-Windows-x64
           path: deploy
