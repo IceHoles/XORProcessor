@@ -1,42 +1,73 @@
-name: Windows Build (MinGW)
+name: Windows · build (MinGW + Qt 6.7.2)
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+    branches: [ main, master ]
 
 jobs:
-  build:
+  build-windows-mingw:
     runs-on: windows-latest
+    env:
+      QT_VERSION: "6.7.2"
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+
+      - name: Setup MSYS2 (install mingw toolchain, cmake, ninja)
+        uses: msys2/setup-msys2@v2
         with:
-          version: '6.7.2'
-          host: 'windows'
-          target: 'desktop'
-          arch: 'mingw'
-          modules: 'qtconcurrent'
-      - name: Configure CMake
-        shell: bash
+          update: true
+          install: >
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkg-config
+
+      - name: Install Qt ${{ env.QT_VERSION }} (MinGW)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          target: desktop
+          arch: win64_mingw
+          use-official: false
+
+      - name: Show Qt info (debug)
         run: |
-          cmake -S . -B build `
-            -G "MinGW Makefiles" `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_PREFIX_PATH=${{ env.QT_INSTALL_PATH }}
-      - name: Build
+          echo "QT_ROOT_DIR=$QT_ROOT_DIR"
+          if [ -x "$(command -v qmake)" ]; then
+            qmake --version || true
+          fi
         shell: bash
-        run: cmake --build build --config Release
-      - name: Package application
-        shell: bash
+
+      - name: Configure & build (MSYS2 / MinGW shell)
+        shell: msys2 {0}
         run: |
-          cmake --install build --prefix ./install
-      - name: Upload Artifact
+          set -e
+
+          # QT_ROOT_DIR приходит как Windows path (например C:\...).
+          # В MSYS2 нужно получить unix-путь:
+          QT_UNIX="$(cygpath -u "$QT_ROOT_DIR")"
+          echo "Using QT (unix path): $QT_UNIX"
+
+          mkdir -p build
+          cd build
+
+          # используем Ninja генератор (msys2-пакет mingw-w64-ucrt-x86_64-cmake предоставляет cmake)
+          cmake -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_UNIX/lib/cmake" \
+            -S .. -B .
+
+          cmake --build . --config Release -- -j
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FileXorProcessor-Windows-MinGW
-          path: ./install/
+          name: build-artifacts
+          path: |
+            build/*.exe
+            build/*.dll
+            build/**/release/*.exe
