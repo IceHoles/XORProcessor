@@ -59,12 +59,11 @@ jobs:
           cmake --build . --config Release --parallel ${JOBS}
 
       - name: Deploy Qt dependencies
-        shell: msys2 {0}
+        shell: bash
         run: |
           mkdir deploy
           cp build/FileXorProcessor.exe deploy/
-          windeployqt deploy/FileXorProcessor.exe
-
+          "/mingw64/bin/windeployqt.exe" deploy/FileXorProcessor.exe
           
       - name: Collect artifacts
         if: always()
