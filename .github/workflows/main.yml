@@ -58,13 +58,16 @@ jobs:
           JOBS=$(nproc || echo 2)
           cmake --build . --config Release --parallel ${JOBS}
 
+      - name: Deploy Qt dependencies
+        shell: bash
+        run: |
+          mkdir deploy
+          cp build/FileXorProcessor.exe deploy/
+          windeployqt --mingw deploy/FileXorProcessor.exe
+          
       - name: Collect artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
-          path: |
-            build/*.exe
-            build/**/*.exe
-            build/*.dll
-            build/**/*.dll
+          path: deploy
