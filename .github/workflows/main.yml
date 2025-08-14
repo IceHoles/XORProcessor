@@ -21,10 +21,11 @@ jobs:
         with:
           update: true
           install: >
-            mingw-w64-ucrt-x86_64-toolchain
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-pkg-config
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkg-config
+
 
       - name: Install Qt ${{ env.QT_VERSION }} (MinGW)
         uses: jurplel/install-qt-action@v4
@@ -46,16 +47,12 @@ jobs:
         shell: msys2 {0}
         run: |
           set -e
-
-          # QT_ROOT_DIR приходит как Windows path (например C:\...).
-          # В MSYS2 нужно получить unix-путь:
           QT_UNIX="$(cygpath -u "$QT_ROOT_DIR")"
           echo "Using QT (unix path): $QT_UNIX"
 
           mkdir -p build
           cd build
 
-          # используем Ninja генератор (msys2-пакет mingw-w64-ucrt-x86_64-cmake предоставляет cmake)
           cmake -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$QT_UNIX/lib/cmake" \
