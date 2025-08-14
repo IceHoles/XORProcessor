@@ -57,18 +57,21 @@ jobs:
           set -e
           mkdir deploy
           cp build/FileXorProcessor.exe deploy/
-
+      
           echo "=== Поиск зависимостей ==="
-          ntldd -R deploy/FileXorProcessor.exe | grep "=> /mingw64" | awk '{print $3}' | sort -u > dll_list.txt
-          
+          ntldd -R deploy/FileXorProcessor.exe 2>/dev/null || true | grep "=> /mingw64" || true | awk '{print $3}' | sort -u > dll_list.txt
+      
           echo "=== Копируем DLL ==="
           while IFS= read -r dll; do
-            echo "Копируем: $dll"
-            cp "$dll" deploy/
+            if [ -f "$dll" ]; then
+              echo "Копируем: $dll"
+              cp "$dll" deploy/
+            fi
           done < dll_list.txt
-
+      
           echo "=== Содержимое deploy/ ==="
           ls -l deploy
+
 
       - name: Create ZIP package
         shell: pwsh
