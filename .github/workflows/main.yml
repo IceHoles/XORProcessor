@@ -18,7 +18,7 @@ jobs:
         with:
           version: '6.7.2'
           host: 'windows'
-          target: 'windows'
+          target: 'desktop'
           arch: 'mingw'
           modules: 'qtconcurrent'
       - name: Configure CMake
