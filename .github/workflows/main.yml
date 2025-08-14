@@ -1,4 +1,4 @@
-name: Windows · build (MinGW + Qt 6.7.2)
+name: Windows · build (MSYS2 / MinGW-w64 + Qt6)
 
 on:
   push:
@@ -7,65 +7,64 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-windows-mingw:
+  build:
     runs-on: windows-latest
-    env:
-      QT_VERSION: "6.7.2"
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSYS2 (install mingw toolchain, cmake, ninja)
+      - name: Setup MSYS2 (install mingw toolchain, Qt6, cmake, ninja)
         uses: msys2/setup-msys2@v2
         with:
           update: true
           install: >
             mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-qt6
+            mingw-w64-x86_64-qt6-tools
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
             mingw-w64-x86_64-pkg-config
 
-
-      - name: Install Qt ${{ env.QT_VERSION }} (MinGW)
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: ${{ env.QT_VERSION }}
-          target: desktop
-          arch: win64_mingw
-          use-official: false
-
-      - name: Show Qt info (debug)
+      - name: Debug info (show compilers / Qt)
+        shell: msys2 {0}
         run: |
-          echo "QT_ROOT_DIR=$QT_ROOT_DIR"
-          if [ -x "$(command -v qmake)" ]; then
-            qmake --version || true
-          fi
-        shell: bash
-
+          echo "MSYSTEM=$MSYSTEM"
+          which c++
+          c++ --version
+          which cmake
+          cmake --version
+          which qmake || true
+          qmake --version || true
+          echo "Qt pkgcmake dir: /mingw64/lib/cmake"
+      
       - name: Configure & build (MSYS2 / MinGW shell)
         shell: msys2 {0}
         run: |
           set -e
-          QT_UNIX="$(cygpath -u "$QT_ROOT_DIR")"
-          echo "Using QT (unix path): $QT_UNIX"
+          unset QT_ROOT_DIR || true
+          unset QT_PLUGIN_PATH || true
+          unset QML2_IMPORT_PATH || true
+
+          CMAKE_PREFIX_PATH="/mingw64/lib/cmake"
 
           mkdir -p build
           cd build
 
           cmake -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$QT_UNIX/lib/cmake" \
+            -DCMAKE_PREFIX_PATH="${CMAKE_PREFIX_PATH}" \
             -S .. -B .
-            
-          JOBS=$(nproc || echo 2)
-          cmake --build . --config Release -- -j${JOBS}
 
-      - name: Upload build artifact
+          JOBS=$(nproc || echo 2)
+          cmake --build . --config Release --parallel ${JOBS}
+
+      - name: Collect artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts
           path: |
             build/*.exe
+            build/**/*.exe
             build/*.dll
-            build/**/release/*.exe
+            build/**/*.dll
